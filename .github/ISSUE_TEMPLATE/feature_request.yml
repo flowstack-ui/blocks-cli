@@ -1,0 +1,35 @@
+name: CLI feature request
+description: Propose a public Blocks CLI capability.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed CLI capability
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Authentication, registry, installation, and compatibility implications
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched for an existing request.
+          required: true
+        - label: I described the problem independently of the proposed solution.
+          required: true

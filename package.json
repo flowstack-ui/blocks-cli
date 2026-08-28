@@ -1,0 +1,20 @@
+{
+  "name": "@flowstack-ui/blocks",
+  "version": "0.2.0",
+  "description": "Authenticated source-free client for FLOWSTACK Blocks.",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "engines": { "node": ">=22" },
+  "bin": { "flowstack-blocks": "./bin/flowstack-blocks.mjs" },
+  "exports": { "./package.json": "./package.json" },
+  "files": ["bin", "src", "README.md", "LICENSE"],
+  "repository": { "type": "git", "url": "git+https://github.com/flowstack-ui/blocks-cli.git" },
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check:leaks": "node src/leak-check.mjs",
+    "pack:check": "node src/pack-check.mjs",
+    "check:repository": "npm test && npm run check:leaks && npm run pack:check"
+  }
+}

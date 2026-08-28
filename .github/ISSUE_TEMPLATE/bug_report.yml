@@ -1,0 +1,47 @@
+name: CLI bug
+description: Report a reproducible problem in the public Blocks CLI.
+title: "[Bug]: "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: CLI version
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Sanitized command and reproduction
+      description: Remove credentials, licensed block source, and private application code.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Node, package manager, framework, operating system, and shell.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched for an existing issue.
+          required: true
+        - label: This contains no credentials, licensed block source, or private application code.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
