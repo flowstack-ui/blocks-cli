@@ -56,7 +56,9 @@ export async function requestSigned(path, config, fetchImpl = fetch) {
 }
 
 export function verifyBundle(payload) {
-  if (payload?.$schema !== "flowstack.block-bundle.v1" || !payload.item?.id || !Array.isArray(payload.files)) fail("Registry bundle is invalid.");
+  const artifactType = payload?.item?.artifactType ?? payload?.artifactType ?? "block";
+  const expectedSchema = artifactType === "block" ? "flowstack.block-bundle.v1" : "flowstack.source-bundle.v1";
+  if (payload?.$schema !== expectedSchema || !payload.item?.id || !Array.isArray(payload.files)) fail("Registry bundle is invalid.");
   const seen = new Set();
   for (const file of payload.files) {
     if (!file.path || file.path.startsWith("/") || file.path.includes("..") || seen.has(file.path)) fail("Registry bundle contains an unsafe or duplicate file path.");
@@ -64,7 +66,10 @@ export function verifyBundle(payload) {
     const bytes = Buffer.from(file.content, "base64");
     if (bytes.length !== file.bytes || sha256(bytes) !== file.sha256) fail(`Registry bundle integrity failed for ${file.path}.`);
   }
-  const identity = JSON.stringify({ id: payload.item.id, version: payload.version, files: payload.files.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest })) });
+  const fileIdentity = payload.files.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest }));
+  const identity = JSON.stringify(artifactType === "block"
+    ? { id: payload.item.id, version: payload.version, files: fileIdentity }
+    : { itemId: payload.item.id, artifactType, version: payload.version, files: fileIdentity });
   if (sha256(identity) !== payload.bundleSha256) fail("Registry bundle identity verification failed.");
   return payload.files.map((file) => ({ ...file, bytesValue: Buffer.from(file.content, "base64") }));
 }

@@ -1,7 +1,7 @@
 {
   "name": "@flowstack-ui/blocks",
-  "version": "0.2.0",
-  "description": "Authenticated source-free client for FLOWSTACK Blocks.",
+  "version": "0.3.0",
+  "description": "Authenticated source-free client for FLOWSTACK Blocks and source components.",
   "type": "module",
   "license": "MIT",
   "private": false,
