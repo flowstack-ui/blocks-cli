@@ -3,7 +3,6 @@ import { constants } from "node:fs";
 import { access, cp, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-const provenanceName = ".flowstack-block.json";
 const exists = (path) => access(path, constants.F_OK).then(() => true, () => false);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -13,12 +12,16 @@ function safeRelative(path) {
 }
 
 export async function installBundle({ payload, files, project = process.cwd(), target, force = false, dryRun = false }) {
+  const artifactType = payload.item.artifactType ?? payload.artifactType ?? "block";
+  const provenanceName = artifactType === "block" ? ".flowstack-block.json" : ".flowstack-component.json";
   const projectRoot = resolve(project);
   if (!(await stat(projectRoot).catch(() => null))?.isDirectory()) throw new Error(`Project directory does not exist: ${projectRoot}`);
-  const defaultTarget = join("components", "blocks", payload.item.id.split("/").slice(-2).join("-"));
+  const defaultTarget = artifactType === "block"
+    ? join("components", "blocks", payload.item.id.split("/").slice(-2).join("-"))
+    : payload.item.destination ?? join("components", "ui", payload.item.id.split("/").slice(-2).join("-"));
   const targetRoot = resolve(projectRoot, target ?? defaultTarget);
   const within = relative(projectRoot, targetRoot);
-  if (!within || within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new Error("The Block target must remain below the project root.");
+  if (!within || within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new Error("The source item target must remain below the project root.");
   const declared = files.map(({ path }) => safeRelative(path));
   const collisions = [];
   for (const path of [...declared, provenanceName]) if (await exists(join(targetRoot, path))) collisions.push(path);
@@ -39,8 +42,13 @@ export async function installBundle({ payload, files, project = process.cwd(), t
       if (sha256(await readFile(destination)) !== file.sha256) throw new Error(`Staged byte verification failed for ${file.path}.`);
     }
     const provenance = {
-      $schema: "flowstack.block-install.v2", id: payload.item.id, bundleVersion: payload.version,
+      $schema: artifactType === "block" ? "flowstack.block-install.v2" : "flowstack.source-install.v1",
+      artifactType,
+      id: payload.item.id,
+      itemId: payload.item.id,
+      bundleVersion: payload.version,
       bundleSha256: payload.bundleSha256, files: files.map(({ path, sha256: digest }) => ({ path, sha256: digest })),
+      dependencies: payload.item.dependencies?.packages ?? {},
     };
     await writeFile(join(stage, provenanceName), `${JSON.stringify(provenance, null, 2)}\n`, { mode: 0o600 });
     if (await exists(targetRoot)) { await rename(targetRoot, backup); moved = true; }

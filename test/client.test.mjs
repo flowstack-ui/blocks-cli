@@ -19,6 +19,14 @@ function bundle(content = "export const value = 1;\n") {
   return { $schema: "flowstack.block-bundle.v1", version: "2026.08.1", item: { id: "application/example/simple" }, files, bundleSha256: sha256(identity) };
 }
 
+function componentBundle(content = "export const RichTextEditor = () => null;\n") {
+  const bytes = Buffer.from(content);
+  const files = [{ path: "rich-text-editor.tsx", bytes: bytes.length, sha256: sha256(bytes), content: bytes.toString("base64") }];
+  const item = { id: "components/rich-text-editor/basic", artifactType: "component", destination: "components/ui/rich-text-editor", dependencies: { packages: { "@flowstack-ui/brick": "0.1.12" } } };
+  const identity = JSON.stringify({ itemId: item.id, artifactType: "component", version: "2026.08.2", files: files.map(({ path, bytes: size, sha256: digest }) => ({ path, bytes: size, sha256: digest })) });
+  return { $schema: "flowstack.source-bundle.v1", itemId: item.id, artifactType: "component", version: "2026.08.2", item, files, bundleSha256: sha256(identity) };
+}
+
 test("sends bearer auth without logging it and verifies the pinned signature", async () => {
   let request;
   const payload = { $schema: "flowstack.block-catalog.v1", items: [] };
@@ -48,5 +56,21 @@ test("dry-run reports collisions; normal install refuses; force is transactional
     assert.equal(await readFile(join(targetRoot, "notes.md"), "utf8"), "preserve\n");
     const provenance = JSON.parse(await readFile(join(targetRoot, ".flowstack-block.json"), "utf8"));
     assert.equal(provenance.bundleSha256, payload.bundleSha256);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("verifies and installs source components to their component destination with a distinct receipt", async () => {
+  const root = await mkdtemp(join(tmpdir(), "flowstack-component-cli-test-"));
+  try {
+    const payload = componentBundle();
+    const files = verifyBundle(payload);
+    const plan = await installBundle({ payload, files, project: root });
+    assert.equal(plan.target, "components/ui/rich-text-editor");
+    assert.equal(await readFile(join(root, plan.target, "rich-text-editor.tsx"), "utf8"), "export const RichTextEditor = () => null;\n");
+    const receipt = JSON.parse(await readFile(join(root, plan.target, ".flowstack-component.json"), "utf8"));
+    assert.equal(receipt.$schema, "flowstack.source-install.v1");
+    assert.equal(receipt.artifactType, "component");
+    assert.equal(receipt.itemId, payload.item.id);
+    assert.deepEqual(receipt.dependencies, { "@flowstack-ui/brick": "0.1.12" });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
