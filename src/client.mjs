@@ -2,6 +2,7 @@ import { verify, createPublicKey, createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { assertArtifactType, sourceDependencyContract } from "./dependencies.mjs";
 
 const schema = "flowstack.signed-envelope.v1";
 
@@ -55,8 +56,48 @@ export async function requestSigned(path, config, fetchImpl = fetch) {
   return envelope.payload;
 }
 
-export function verifyBundle(payload) {
-  if (payload?.$schema !== "flowstack.block-bundle.v1" || !payload.item?.id || !Array.isArray(payload.files)) fail("Registry bundle is invalid.");
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, child]) => [key, canonicalJson(child)]));
+  }
+  return value;
+}
+
+function publicItemIdentity(item) {
+  const result = Object.fromEntries([
+    "id", "artifactType", "name", "description", "access", "family", "category", "variant",
+    "destination", "sourceIntegritySha256",
+  ].filter((key) => item?.[key] !== undefined).map((key) => [key, item[key]]));
+  result.artifactType = assertArtifactType(item?.artifactType);
+  if (item?.dependencies?.packages) result.dependencies = { packages: { ...item.dependencies.packages } };
+  if (item?.agentCoverage?.status) result.agentCoverage = { status: item.agentCoverage.status };
+  if (item?.preview === null) result.preview = null;
+  else if (item?.preview) {
+    result.preview = Object.fromEntries(["id", "type", "url", "alt", "width", "height"]
+      .filter((key) => item.preview[key] !== undefined).map((key) => [key, item.preview[key]]));
+  }
+  return canonicalJson(result);
+}
+
+function verifyMetadataBinding(payload, expectedItem, requestedId) {
+  if (!expectedItem && !requestedId) return;
+  if (!expectedItem || typeof requestedId !== "string" || requestedId.length === 0) fail("Registry bundle metadata binding is incomplete.");
+  const expected = publicItemIdentity(expectedItem);
+  const delivered = publicItemIdentity(payload?.item);
+  if (expected.id !== requestedId || delivered.id !== requestedId || JSON.stringify(expected) !== JSON.stringify(delivered)) {
+    fail("Registry bundle does not match the requested signed catalog metadata; no files were written.");
+  }
+}
+
+export function verifyBundle(payload, { expectedItem, requestedId } = {}) {
+  const artifactType = assertArtifactType(payload?.item?.artifactType ?? payload?.artifactType);
+  if (payload?.artifactType !== undefined && assertArtifactType(payload.artifactType) !== artifactType) fail("Registry bundle artifact type is inconsistent.");
+  const expectedSchema = artifactType === "block" ? "flowstack.block-bundle.v1" : "flowstack.source-bundle.v1";
+  if (payload?.$schema !== expectedSchema || !payload.item?.id || !Array.isArray(payload.files)) fail("Registry bundle is invalid.");
+  if (artifactType === "component" && payload.itemId !== payload.item.id) fail("Registry bundle item identity is inconsistent.");
+  verifyMetadataBinding(payload, expectedItem, requestedId);
+  sourceDependencyContract(payload.item, artifactType);
   const seen = new Set();
   for (const file of payload.files) {
     if (!file.path || file.path.startsWith("/") || file.path.includes("..") || seen.has(file.path)) fail("Registry bundle contains an unsafe or duplicate file path.");
@@ -64,7 +105,18 @@ export function verifyBundle(payload) {
     const bytes = Buffer.from(file.content, "base64");
     if (bytes.length !== file.bytes || sha256(bytes) !== file.sha256) fail(`Registry bundle integrity failed for ${file.path}.`);
   }
-  const identity = JSON.stringify({ id: payload.item.id, version: payload.version, files: payload.files.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest })) });
+  const fileIdentity = payload.files.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest }));
+  if (artifactType === "component") {
+    const sourceIdentity = fileIdentity
+      .map(({ path, sha256: digest }) => ({ path, sha256: digest }))
+      .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+    if (!/^[a-f0-9]{64}$/u.test(payload.item.sourceIntegritySha256 ?? "") || sha256(JSON.stringify(sourceIdentity)) !== payload.item.sourceIntegritySha256) {
+      fail("Registry bundle source integrity verification failed.");
+    }
+  }
+  const identity = JSON.stringify(artifactType === "block"
+    ? { id: payload.item.id, version: payload.version, files: fileIdentity }
+    : { itemId: payload.item.id, artifactType, version: payload.version, files: fileIdentity });
   if (sha256(identity) !== payload.bundleSha256) fail("Registry bundle identity verification failed.");
   return payload.files.map((file) => ({ ...file, bytesValue: Buffer.from(file.content, "base64") }));
 }
