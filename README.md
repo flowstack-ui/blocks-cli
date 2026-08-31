@@ -34,6 +34,22 @@ reports collisions without writing. Forced installation stages a complete
 replacement transaction while preserving unrelated files already in the
 target directory and records exact bundle/file digests.
 
+Every source component must declare a non-empty package dependency contract in
+its signed metadata. `add`, including `--dry-run`, checks installed package
+versions before any write. Compatible versions are reported, missing packages
+are reported with the exact install specification, and an installed version
+outside the declared range blocks installation. Existing Blocks retain their
+legacy install behavior; this stricter dependency gate applies only to source
+components. The client also recomputes each source component's aggregate
+integrity from the verified file digests in canonical path order.
+
+`add` binds the requested stable ID and the complete signed public metadata
+projection to the downloaded bundle before installation. Artifact types are a
+closed `block|component` set, so a source component cannot be downgraded to a
+Block to bypass component validation. Targets, their existing descendants,
+and staged paths must contain only ordinary directories and regular files;
+symbolic links and special files are rejected before copying or replacement.
+
 Individual and team licenses are lifetime entitlements; the registry, not this
 client, decides which account or team a token authorizes. Public marketing may
 show screenshots or compiled, no-source-map previews with purchase calls to

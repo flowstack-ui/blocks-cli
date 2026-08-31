@@ -44,9 +44,14 @@ export async function run(argv, dependencies = {}) {
     const metadata = await request(`/v1/public/catalog/${encodeURIComponent(rest[0])}`);
     if (metadata.item.access === "paid") requireAccessToken(config);
     const payload = await request(`/v1/bundles/${encodeURIComponent(rest[0])}`);
-    const files = verifyBundle(payload);
+    const files = verifyBundle(payload, { expectedItem: metadata.item, requestedId: rest[0] });
     const plan = await installBundle({ payload, files, project: options.project, target: options.target, force: options.force, dryRun: options["dry-run"] });
     console.log(`${plan.dryRun ? "Would install" : "Installed"} ${plan.id} at ${plan.target}`);
+    for (const dependency of plan.dependencies) {
+      console.log(`Dependency: ${dependency.name}@${dependency.version ?? "missing"} (${dependency.status}; requires ${dependency.range})`);
+    }
+    const missing = plan.dependencies.filter(({ status }) => status === "missing");
+    if (missing.length) console.log(`Install required packages: ${missing.map(({ name, range }) => `${name}@"${range}"`).join(" ")}`);
     if (plan.collisions.length) console.log(`Collisions: ${plan.collisions.join(", ")}`);
     return;
   }
