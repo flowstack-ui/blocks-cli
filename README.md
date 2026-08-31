@@ -55,3 +55,6 @@ client, decides which account or team a token authorizes. Public marketing may
 show screenshots or compiled, no-source-map previews with purchase calls to
 action. It must never install a paid source artifact into a public website
 repository.
+
+The repository's MIT license applies only to this public client. Paid source
+artifacts are delivered under separate commercial licenses.
